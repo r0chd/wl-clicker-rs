@@ -1,5 +1,6 @@
 use crate::{START, WlClicker};
 use calloop::timer::{TimeoutAction, Timer};
+use evdev::KeyCode;
 use rand::prelude::*;
 use rand_distr::{Distribution, Normal, Poisson};
 use std::time::{Duration, Instant};
@@ -7,6 +8,8 @@ use wayland_client::{globals::GlobalList, protocol::wl_pointer};
 use wayland_protocols_wlr::virtual_pointer::v1::client::{
     zwlr_virtual_pointer_manager_v1, zwlr_virtual_pointer_v1,
 };
+
+pub static POISSON_LAMBDA_FACTOR: f64 = 1.0;
 
 pub struct VirtualPointer {
     pointer: zwlr_virtual_pointer_v1::ZwlrVirtualPointerV1,
@@ -57,16 +60,16 @@ impl VirtualPointer {
         self.pointer.frame();
     }
 
-    pub fn click(&self) {
+    pub fn click(&self, button: KeyCode) {
         self.pointer.button(
             START.elapsed().as_millis() as u32,
-            0x110,
+            button.code() as u32,
             wl_pointer::ButtonState::Pressed,
         );
         self.pointer.frame();
         self.pointer.button(
             START.elapsed().as_millis() as u32,
-            0x110,
+            button.code() as u32,
             wl_pointer::ButtonState::Released,
         );
         self.pointer.frame();
@@ -97,7 +100,8 @@ impl VirtualPointer {
                         }
                     };
 
-                    let poisson = Poisson::new(window_average_cps as f64).unwrap();
+                    let poisson =
+                        Poisson::new(window_average_cps as f64 * POISSON_LAMBDA_FACTOR).unwrap();
                     let clicks_this_window = poisson.sample(&mut rng) as u32;
 
                     state.virtual_pointer.last_window_start = Some(now);
@@ -106,11 +110,11 @@ impl VirtualPointer {
                 }
             }
 
-            state.virtual_pointer.click();
-            state.virtual_pointer.clicks_in_current_window += 1;
-
             match state.current_profile.as_ref() {
                 Some(profile) => {
+                    state.virtual_pointer.click(profile.repeat_key);
+                    state.virtual_pointer.clicks_in_current_window += 1;
+
                     state.virtual_pointer.jitter(profile.jitter);
 
                     let remaining_clicks = state

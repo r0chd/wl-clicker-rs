@@ -34,6 +34,10 @@ in
       };
     };
 
+    services.udev.extraRules = ''
+      KERNEL=="uinput", OWNER="wl-clicker-rs", MODE="0600"
+    '';
+
     systemd.user.services.wl-clicker-rs = {
       description = "Wayland autoclicker (socket access only)";
       wantedBy = [ "default.target" ];
